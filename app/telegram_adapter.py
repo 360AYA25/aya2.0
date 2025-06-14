@@ -1,17 +1,14 @@
 from fastapi import APIRouter, Request, HTTPException
 from telegram import Update
-from telegram.ext import (
-    Application,
-    ContextTypes,
-    AIORateLimiter,
-    MessageHandler,
-    filters,
-)
-import os, logging
+from telegram.ext import Application, ContextTypes, AIORateLimiter
+import openai, os, logging
 
-router = APIRouter()
-
+# ====== keys & clients ======
+openai.api_key = os.environ["OPENAI_KEY"]
 TOKEN = os.environ["TELEGRAM_TOKEN"]
+
+# ====== telegram setup ======
+router = APIRouter()
 tg_app = (
     Application.builder()
     .token(TOKEN)
@@ -19,6 +16,7 @@ tg_app = (
     .build()
 )
 
+# ====== webhook endpoint ======
 @router.post("/webhook/telegram")
 async def telegram_webhook(req: Request):
     try:
@@ -31,8 +29,20 @@ async def telegram_webhook(req: Request):
         logging.exception("telegram webhook error")
         raise HTTPException(500, str(e))
 
-async def echo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if update.message:
-        await update.message.reply_text(update.message.text)
+# ====== message handler ======
+@tg_app.message()
+async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    user_text = update.message.text
 
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are Aya, the helpful assistant."},
+            {"role": "user", "content": user_text},
+        ],
+        temperature=0.7,
+    )
+    answer = response.choices[0].message.content.strip()
+    await update.message.reply_text(answer)
