@@ -9,6 +9,8 @@ from telegram.ext import (
 )
 import os, logging
 import openai
+from firestore_client import save_dialog
+TOPIC = "christianity"
 
 # -------- GPT helper --------
 async def ask_gpt(prompt: str) -> str:
@@ -53,6 +55,7 @@ async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
      if update.message:
          user_text  = update.message.text.strip()
          bot_answer = await ask_gpt(user_text)
+         await save_dialog(user_text, bot_answer, topic=TOPIC)
          await update.message.reply_text(bot_answer)
   
 tg_app.add_handler(
