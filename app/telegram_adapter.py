@@ -9,7 +9,7 @@ from telegram.ext import (
 )
 import os, logging
 import openai
-from firestore_client import save_dialog
+from app.firestore_client import save_dialog
 TOPIC = "christianity"
 
 # -------- GPT helper --------
