@@ -48,13 +48,14 @@ async def telegram_webhook(req: Request):
         logging.exception("telegram webhook error")
         raise HTTPException(500, str(e))
 
-async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-# if update.message:                                   # только текст
-        user_text = update.message.text.strip()
-        bot_answer = await ask_gpt(user_text)            # GPT-4o
-        await update.message.reply_text(bot_answer)
 
- tg_app.add_handler(
+async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+     if update.message:
+         user_text  = update.message.text.strip()
+         bot_answer = await ask_gpt(user_text)
+         await update.message.reply_text(bot_answer)
+  
+tg_app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_reply)
 )
 
