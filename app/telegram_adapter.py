@@ -10,7 +10,7 @@ from telegram.ext import (
     filters,
 )
 import os, openai
-from app.firestore_client import save_dialog
+from app.firestore_client import save_dialog, get_last_dialog
 from app.state import set_topic, get_topic
 
 ROADMAP_FILE = "docs/roadmap/Aya Bot — Roadmap v0.3.pdf"
@@ -36,17 +36,17 @@ async def ask_gpt(prompt: str) -> str:
     )
     return resp.choices[0].message.content.strip()
 
-async def cmd_topic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
+async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
         await update.message.reply_text("Usage: /topic <name>")
         return
-    topic = context.args[0]
+    topic = ctx.args[0]
     await set_topic(str(update.effective_user.id), topic)
     await update.message.reply_text(f"✓ Topic switched to {topic}")
 
 tg_app.add_handler(CommandHandler("topic", cmd_topic))
 
-async def cmd_roadmap(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_roadmap(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(open(ROADMAP_FILE, "rb"))
 
 tg_app.add_handler(CommandHandler("roadmap", cmd_roadmap))
@@ -54,6 +54,15 @@ tg_app.add_handler(CommandHandler("roadmap", cmd_roadmap))
 @router.get("/roadmap/latest")
 async def get_latest_roadmap():
     return FileResponse(ROADMAP_FILE)
+
+async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    n = int(ctx.args[0]) if ctx.args else 6
+    topic = await get_topic(str(update.effective_user.id))
+    msgs = await get_last_dialog(topic=topic, limit=n)
+    text = "\n".join(f"👤 {m['user']}\n🤖 {m['bot']}" for m in msgs) or "— empty ―"
+    await update.message.reply_text(text)
+
+tg_app.add_handler(CommandHandler("history", cmd_history))
 
 async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not update.message:
