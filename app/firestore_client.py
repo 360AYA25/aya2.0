@@ -11,10 +11,8 @@ async def save_dialog(user_text: str,
                       bot_text: str,
                       *,
                       topic: str = "default"):
-await _db.collection("dialogs") \
+    await _db.collection("dialogs") \
              .document(topic) \
              .collection("messages") \
-             .add({
-                 "user": user_text,
-                 "bot":  bot_text
-             })
+             .add({"user": user_text, "bot": bot_text})
+
