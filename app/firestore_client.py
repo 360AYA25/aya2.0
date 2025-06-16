@@ -7,8 +7,14 @@ _creds = service_account.Credentials.from_service_account_info(
 )
 _db = AsyncClient(credentials=_creds, project=_creds.project_id)
 
-async def save_dialog(user_id: str, message: dict):
-    await _db.collection("dialogs") \
-             .document(user_id) \
+async def save_dialog(user_text: str,
+                      bot_text: str,
+                      *,
+                      topic: str = "default"):
+await _db.collection("dialogs") \
+             .document(topic) \
              .collection("messages") \
-             .add(message)
+             .add({
+                 "user": user_text,
+                 "bot":  bot_text
+             })
