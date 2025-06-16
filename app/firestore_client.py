@@ -1,20 +1,14 @@
-from google.cloud import firestore_async
+import os, json
+from google.cloud.firestore import AsyncClient
+from google.oauth2 import service_account
 
-db = firestore_async.Client()
+_creds = service_account.Credentials.from_service_account_info(
+    json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+)
+_db = AsyncClient(credentials=_creds, project=_creds.project_id)
 
-async def save_dialog(uid: str, collection: str, message: dict):
-    """
-    uid         – id пользователя Telegram
-    collection  – например 'christianity'
-    message     – {role:'user'|'bot', text:'...'}
-    """
-    doc = db.collection("dialogs").document(uid).collection(collection).document()
-    await doc.set(message)
-
-async def load_history(uid: str, collection: str, limit: int = 20):
-    q = (
-        db.collection("dialogs").document(uid)
-          .collection(collection).order_by("timestamp", direction=firestore_async.Enum.DESCENDING)
-          .limit(limit)
-    )
-    return [doc.to_dict() async for doc in q.stream()]
+async def save_dialog(user_id: str, message: dict):
+    await _db.collection("dialogs") \
+             .document(user_id) \
+             .collection("messages") \
+             .add(message)
