@@ -1,4 +1,6 @@
+import os, openai
 from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -8,10 +10,11 @@ from telegram.ext import (
     CommandHandler,
     filters,
 )
-import os, openai
 
 from app.firestore_client import save_dialog, get_last_dialog
 from app.state import set_topic, get_topic
+
+ROADMAP_FILE = "docs/roadmap/Aya Bot — Roadmap v0.3.pdf"
 
 router = APIRouter()
 
@@ -25,22 +28,18 @@ tg_app = (
     .build()
 )
 
-# ─────────── GPT ───────────
+# ───────────────────────── helpers ──────────────────────────
 async def ask_gpt(user_id: str, prompt: str) -> str:
     resp = await openai.ChatCompletion.acreate(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ],
-        user=str(user_id),
+        messages=[{"role": "user", "content": prompt}],
+        user=user_id,
         temperature=0.7,
-        max_tokens=350,
+        max_tokens=500,
     )
     return resp.choices[0].message.content.strip()
-# ───────────────────────────
 
-# /topic ----------------------------------------------------------
+# ───────────────────────── commands ─────────────────────────
 async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         await update.message.reply_text("Usage: /topic <name>")
@@ -49,7 +48,6 @@ async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await set_topic(str(update.effective_user.id), topic)
     await update.message.reply_text(f"✓ Topic switched to {topic}")
 
-# /history --------------------------------------------------------
 async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
     history = await get_last_dialog(topic, limit=12)
@@ -58,10 +56,9 @@ async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     out = []
     for h in history:
-        out.append(f"🧑 {h['user']}\n🤖 {h['bot']}")
+        out.append(f"👤 {h['user']}\n🤖 {h['bot']}")
     await update.message.reply_text("\n\n".join(out))
 
-# /summary --------------------------------------------------------
 async def cmd_summary(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
     history = await get_last_dialog(topic, limit=12)
@@ -78,7 +75,6 @@ async def cmd_summary(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     summary = await ask_gpt(str(update.effective_user.id), summary_prompt)
     await update.message.reply_text(summary)
 
-# GPT reply -------------------------------------------------------
 async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -88,13 +84,13 @@ async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await save_dialog(user_text, bot_answer, topic=topic)
     await update.message.reply_text(bot_answer)
 
-# Handlers --------------------------------------------------------
-tg_app.add_handler(CommandHandler("topic", cmd_topic))
-tg_app.add_handler(CommandHandler("history", cmd_history))
-tg_app.add_handler(CommandHandler("summary", cmd_summary))
+# ─────────────────────── handler binding ────────────────────
+tg_app.add_handler(CommandHandler("topic",    cmd_topic))
+tg_app.add_handler(CommandHandler("history",  cmd_history))
+tg_app.add_handler(CommandHandler("summary",  cmd_summary))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_reply))
 
-# Webhook endpoint -----------------------------------------------
+# ────────────────────── http endpoints ──────────────────────
 @router.post("/webhook/telegram")
 async def telegram_webhook(req: Request):
     data = await req.json()
@@ -102,4 +98,12 @@ async def telegram_webhook(req: Request):
     await tg_app.initialize()
     await tg_app.process_update(update)
     return {"ok": True}
+
+@router.get("/roadmap/latest")
+async def roadmap():
+    return FileResponse(ROADMAP_FILE)
+
+@router.get("/health")
+async def health():
+    return {"status": "ok"}
 
