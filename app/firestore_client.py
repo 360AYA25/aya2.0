@@ -1,4 +1,4 @@
-import os, json
+import os, json, asyncio
 from google.cloud.firestore import AsyncClient
 from google.oauth2 import service_account
 from google.cloud.firestore_v1 import SERVER_TIMESTAMP
@@ -8,7 +8,7 @@ _creds = service_account.Credentials.from_service_account_info(
 )
 _db = AsyncClient(credentials=_creds, project=_creds.project_id)
 
-
+# ─────────── dialogs ───────────
 async def save_dialog(user_text: str, bot_text: str, *, topic: str = "default"):
     await (
         _db.collection("dialogs")
@@ -16,7 +16,6 @@ async def save_dialog(user_text: str, bot_text: str, *, topic: str = "default"):
         .collection("messages")
         .add({"user": user_text, "bot": bot_text, "time": SERVER_TIMESTAMP})
     )
-
 
 async def get_last_dialog(topic: str, limit: int = 6):
     docs = (
@@ -29,12 +28,24 @@ async def get_last_dialog(topic: str, limit: int = 6):
     )
     return [d.to_dict() for d in docs][::-1]
 
+# ─────────── prompts ───────────
+_prompt_cache: dict[str, str] = {}
 
-async def set_system_prompt(topic: str, prompt: str) -> None:
-    await _db.collection("topics").document(topic).set({"system_prompt": prompt})
+async def set_prompt(topic: str, prompt: str) -> None:
+    await _db.collection("prompts").document(topic).set(
+        {"prompt": prompt, "updated_at": SERVER_TIMESTAMP}
+    )
+    _prompt_cache[topic] = prompt
 
+async def get_prompt(topic: str) -> str:
+    if topic in _prompt_cache:
+        return _prompt_cache[topic]
+    doc = await _db.collection("prompts").document(topic).get()
+    text = doc.to_dict().get("prompt", "") if doc.exists else ""
+    _prompt_cache[topic] = text
+    return text
 
-async def get_system_prompt(topic: str) -> str:
-    doc = await _db.collection("topics").document(topic).get()
-    return doc.to_dict().get("system_prompt", "") if doc.exists else ""
+async def reload_prompt(topic: str) -> str:
+    _prompt_cache.pop(topic, None)
+    return await get_prompt(topic)
 
