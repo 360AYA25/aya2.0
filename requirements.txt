@@ -1,16 +1,15 @@
 fastapi
 uvicorn[standard]
 
-# Telegram bot
+python-telegram-bot[async]==20.8
 python-telegram-bot[async,rate-limiter]==20.8
+python-telegram-bot[rate-limiter]
 
-# OpenAI
 openai==0.28.1
 
-# Firestore (client + auth)
 google-cloud-firestore>=2.11.0
+google-cloud-storage>=2.16.0
 google-auth>=2.22.0
 
-# multipart-парсер для FastAPI-UploadFile
-python-multipart>=0.0.9
+aiofiles>=23.1.0          # <-- new
 
