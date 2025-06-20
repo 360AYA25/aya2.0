@@ -1,11 +1,26 @@
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+import os
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
+from app.telegram_adapter import build_app
 
-from app.telegram_adapter import router as tg_router
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 app = FastAPI()
-app.include_router(tg_router)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# локальные файлы, загруженные через /upload
-app.mount("/files", StaticFiles(directory="local_uploads"), name="files")
+tg_app = build_app(TOKEN)
+
+@app.on_event("startup")
+async def _init() -> None:
+    await tg_app.initialize()
+
+@app.post("/webhook/telegram")
+async def webhook(req: Request) -> Response:
+    await tg_app.process_update(await req.body())
+    return Response(status_code=200)
+
+@app.get("/")
+def root() -> dict:
+    return {"status": "ok"}
 
