@@ -29,3 +29,12 @@ async def get_last_dialog(topic: str, limit: int = 6):
     )
     return [d.to_dict() for d in docs][::-1]
 
+
+async def set_system_prompt(topic: str, prompt: str) -> None:
+    await _db.collection("topics").document(topic).set({"system_prompt": prompt})
+
+
+async def get_system_prompt(topic: str) -> str:
+    doc = await _db.collection("topics").document(topic).get()
+    return doc.to_dict().get("system_prompt", "") if doc.exists else ""
+
