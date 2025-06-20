@@ -1,16 +1,13 @@
-import os, json, uuid
-from google.cloud.storage import Client
-from google.oauth2 import service_account
+import os, uuid, pathlib
 
-_creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
-)
-_storage = Client(credentials=_creds, project=_creds.project_id)
-_BUCKET = os.environ["GCS_BUCKET"]        # example: aya-files
+_BASE = pathlib.Path(__file__).parent.parent / "local_uploads"
+_BASE.mkdir(exist_ok=True)
 
-async def put_file(fname: str, data: bytes) -> str:
-    blob_id = f"{uuid.uuid4()}_{fname}"
-    bucket = _storage.bucket(_BUCKET)
-    bucket.blob(blob_id).upload_from_string(data)
-    return blob_id
+def put_file(name: str, data: bytes) -> str:
+    fname = f"{uuid.uuid4().hex}_{os.path.basename(name)}"
+    (_BASE / fname).write_bytes(data)
+    return f"/files/{fname}"
+
+def get_file(name: str) -> bytes:
+    return (_BASE / name).read_bytes()
 
