@@ -3,18 +3,15 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 from telegram import Update
 from telegram.ext import (
-    Application,
-    ContextTypes,
-    AIORateLimiter,
-    MessageHandler,
-    CommandHandler,
-    filters,
+    Application, ContextTypes, AIORateLimiter,
+    MessageHandler, CommandHandler, filters,
 )
 
-from app.firestore_client import save_dialog, get_last_dialog
+from app.firestore_client import (
+    save_dialog, get_last_dialog,
+    set_system_prompt, get_system_prompt,
+)
 from app.state import set_topic, get_topic
-
-ROADMAP_FILE = "docs/roadmap/Aya Bot — Roadmap v0.3.pdf"
 
 router = APIRouter()
 
@@ -28,69 +25,81 @@ tg_app = (
     .build()
 )
 
-# ───────────────────────── helpers ──────────────────────────
+
 async def ask_gpt(user_id: str, prompt: str) -> str:
+    topic = await get_topic(user_id)
+    sys_prompt = await get_system_prompt(topic) or "You are AYA bot."
+    history = await get_last_dialog(topic, 6)
+
+    messages = [{"role": "system", "content": sys_prompt}]
+    for h in history:
+        messages.append({"role": "user", "content": h["user"]})
+        messages.append({"role": "assistant", "content": h["bot"]})
+    messages.append({"role": "user", "content": prompt})
+
     resp = await openai.ChatCompletion.acreate(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         user=user_id,
         temperature=0.7,
         max_tokens=500,
     )
     return resp.choices[0].message.content.strip()
 
-# ───────────────────────── commands ─────────────────────────
+
 async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         await update.message.reply_text("Usage: /topic <name>")
         return
-    topic = ctx.args[0]
-    await set_topic(str(update.effective_user.id), topic)
-    await update.message.reply_text(f"✓ Topic switched to {topic}")
+    await set_topic(str(update.effective_user.id), ctx.args[0])
+    await update.message.reply_text(f"✓ Topic switched to {ctx.args[0]}")
+
 
 async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
-    history = await get_last_dialog(topic, limit=12)
+    history = await get_last_dialog(topic, 12)
     if not history:
         await update.message.reply_text("— empty —")
         return
-    out = []
-    for h in history:
-        out.append(f"👤 {h['user']}\n🤖 {h['bot']}")
-    await update.message.reply_text("\n\n".join(out))
+    text = "\n\n".join(f"👤 {h['user']}\n🤖 {h['bot']}" for h in history)
+    await update.message.reply_text(text)
+
 
 async def cmd_summary(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
-    history = await get_last_dialog(topic, limit=12)
+    history = await get_last_dialog(topic, 12)
     if not history:
         await update.message.reply_text("— empty —")
         return
-    convo = []
-    for h in history:
-        convo.append(f"User: {h['user']}\nBot: {h['bot']}")
-    summary_prompt = (
-        "Summarize the following conversation in 5 bullet points:\n\n"
-        + "\n\n".join(convo)
+    convo = "\n\n".join(f"User: {h['user']}\nBot: {h['bot']}" for h in history)
+    summary = await ask_gpt(
+        str(update.effective_user.id),
+        "Summarize the following conversation in 5 bullet points:\n\n" + convo,
     )
-    summary = await ask_gpt(str(update.effective_user.id), summary_prompt)
     await update.message.reply_text(summary)
+
+
+async def cmd_prompt(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    topic = await get_topic(str(update.effective_user.id))
+    if not ctx.args:
+        current = await get_system_prompt(topic) or "— empty —"
+        await update.message.reply_text(current)
+        return
+    await set_system_prompt(topic, " ".join(ctx.args))
+    await update.message.reply_text("✓ System prompt updated")
+
 
 async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
     user_text = update.message.text.strip()
-    bot_answer = await ask_gpt(str(update.effective_user.id), user_text)
-    topic = await get_topic(str(update.effective_user.id))
-    await save_dialog(user_text, bot_answer, topic=topic)
-    await update.message.reply_text(bot_answer)
+    user_id = str(update.effective_user.id)
+    bot_text = await ask_gpt(user_id, user_text)
+    topic = await get_topic(user_id)
+    await save_dialog(user_text, bot_text, topic=topic)
+    await update.message.reply_text(bot_text)
 
-# ─────────────────────── handler binding ────────────────────
-tg_app.add_handler(CommandHandler("topic",    cmd_topic))
-tg_app.add_handler(CommandHandler("history",  cmd_history))
-tg_app.add_handler(CommandHandler("summary",  cmd_summary))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_reply))
 
-# ────────────────────── http endpoints ──────────────────────
 @router.post("/webhook/telegram")
 async def telegram_webhook(req: Request):
     data = await req.json()
@@ -99,11 +108,15 @@ async def telegram_webhook(req: Request):
     await tg_app.process_update(update)
     return {"ok": True}
 
-@router.get("/roadmap/latest")
-async def roadmap():
-    return FileResponse(ROADMAP_FILE)
 
 @router.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+tg_app.add_handler(CommandHandler("topic",   cmd_topic))
+tg_app.add_handler(CommandHandler("history", cmd_history))
+tg_app.add_handler(CommandHandler("summary", cmd_summary))
+tg_app.add_handler(CommandHandler("prompt",  cmd_prompt))
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_reply))
 
