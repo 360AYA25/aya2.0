@@ -8,7 +8,7 @@ import os, openai, asyncio
 
 from app.firestore_client import save_dialog
 from app.state           import set_topic, get_topic
-from app.storage_client  from put_file
+from app.storage_client import put_file
 
 router = APIRouter()
 
