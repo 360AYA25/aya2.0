@@ -1,4 +1,4 @@
-import os, json, asyncio
+import os, json
 from google.cloud.firestore import AsyncClient
 from google.oauth2 import service_account
 from google.cloud.firestore_v1 import SERVER_TIMESTAMP
@@ -8,7 +8,6 @@ _creds = service_account.Credentials.from_service_account_info(
 )
 _db = AsyncClient(credentials=_creds, project=_creds.project_id)
 
-# ─────────── dialogs ───────────
 async def save_dialog(user_text: str, bot_text: str, *, topic: str = "default"):
     await (
         _db.collection("dialogs")
@@ -28,10 +27,9 @@ async def get_last_dialog(topic: str, limit: int = 6):
     )
     return [d.to_dict() for d in docs][::-1]
 
-# ─────────── prompts ───────────
 _prompt_cache: dict[str, str] = {}
 
-async def set_prompt(topic: str, prompt: str) -> None:
+async def set_prompt(topic: str, prompt: str):
     await _db.collection("prompts").document(topic).set(
         {"prompt": prompt, "updated_at": SERVER_TIMESTAMP}
     )
@@ -48,4 +46,9 @@ async def get_prompt(topic: str) -> str:
 async def reload_prompt(topic: str) -> str:
     _prompt_cache.pop(topic, None)
     return await get_prompt(topic)
+
+async def add_file_meta(blob_id: str, fname: str, user_id: str):
+    await _db.collection("files").add(
+        {"blob": blob_id, "name": fname, "user": user_id, "time": SERVER_TIMESTAMP}
+    )
 

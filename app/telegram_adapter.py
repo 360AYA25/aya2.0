@@ -8,12 +8,13 @@ from telegram.ext import (
 
 from app.firestore_client import (
     save_dialog, get_last_dialog,
-    get_prompt, set_prompt, reload_prompt,
+    set_prompt, get_prompt, reload_prompt,
+    add_file_meta,
 )
+from app.storage_client import put_file
 from app.state import set_topic, get_topic
 
 router = APIRouter()
-
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 openai.api_key = os.environ["OPENAI_KEY"]
 
@@ -24,7 +25,6 @@ tg_app = (
     .build()
 )
 
-# ─────────── GPT helper ───────────
 async def ask_gpt(user_id: str, prompt: str) -> str:
     topic = await get_topic(user_id)
     sys_prompt = await get_prompt(topic) or "You are AYA bot."
@@ -45,7 +45,6 @@ async def ask_gpt(user_id: str, prompt: str) -> str:
     )
     return resp.choices[0].message.content.strip()
 
-# ─────────── commands ───────────
 async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         await update.message.reply_text("Usage: /topic <name>")
@@ -55,13 +54,9 @@ async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
-    history = await get_last_dialog(topic, 12)
-    if not history:
-        await update.message.reply_text("— empty —")
-        return
-    await update.message.reply_text(
-        "\n\n".join(f"👤 {h['user']}\n🤖 {h['bot']}" for h in history)
-    )
+    h = await get_last_dialog(topic, 12)
+    text = "\n\n".join(f"👤 {i['user']}\n🤖 {i['bot']}" for i in h) if h else "— empty —"
+    await update.message.reply_text(text)
 
 async def cmd_prompt(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
@@ -74,8 +69,18 @@ async def cmd_prompt(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_prompt_reload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     topic = await get_topic(str(update.effective_user.id))
-    text = await reload_prompt(topic) or "— empty —"
-    await update.message.reply_text(f"✓ Reloaded\n{text}")
+    cur = await reload_prompt(topic) or "— empty —"
+    await update.message.reply_text(f"✓ Reloaded\n{cur}")
+
+async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.document:
+        await update.message.reply_text("Attach a PDF/MD file with this command.")
+        return
+    doc = update.message.document
+    raw = await (await tg_app.bot.get_file(doc.file_id)).download_as_bytearray()
+    blob_id = await put_file(doc.file_name, raw)
+    await add_file_meta(blob_id, doc.file_name, str(update.effective_user.id))
+    await update.message.reply_text(f"✓ Uploaded {doc.file_name}")
 
 async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -87,14 +92,13 @@ async def gpt_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await save_dialog(user_text, bot_text, topic=topic)
     await update.message.reply_text(bot_text)
 
-# ─────────── handlers ───────────
 tg_app.add_handler(CommandHandler("topic",          cmd_topic))
 tg_app.add_handler(CommandHandler("history",        cmd_history))
 tg_app.add_handler(CommandHandler("prompt",         cmd_prompt))
 tg_app.add_handler(CommandHandler("prompt_reload",  cmd_prompt_reload))
+tg_app.add_handler(MessageHandler(filters.Document.ALL, cmd_upload))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gpt_reply))
 
-# ─────────── webhook ───────────
 @router.post("/webhook/telegram")
 async def telegram_webhook(req: Request):
     data = await req.json()
