@@ -8,13 +8,12 @@ from telegram.ext import (
     CommandHandler,
     filters,
 )
-import os, openai, uuid, mimetypes, asyncio
+import os, openai, uuid
 from app.firestore_client import (
     save_dialog,
-    get_topic,
-    set_topic,
     get_dialog_page,
 )
+from app.state import set_topic, get_topic
 from app.storage_client import put_file
 
 router = APIRouter()
@@ -55,9 +54,7 @@ async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not history:
         await update.message.reply_text("— empty —")
         return
-    out = []
-    for h in history:
-        out.append(f"💬 {h['user']}\n🤖 {h['bot']}")
+    out = [f"💬 {h['user']}\n🤖 {h['bot']}" for h in history]
     await update.message.reply_text("\n\n".join(out))
 
 
