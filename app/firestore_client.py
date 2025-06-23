@@ -1,47 +1,41 @@
-import datetime
-from google.cloud.firestore import AsyncClient
+import os, datetime
+from google.cloud.firestore_async import AsyncClient
 
-_client: AsyncClient | None = None
-
-
-def _get_client() -> AsyncClient:
-    global _client
-    if _client is None:
-        _client = AsyncClient()
-    return _client
+_db: AsyncClient | None = None
 
 
-async def save_dialog(user_id: str, user_msg: str, bot_msg: str):
-    await _get_client()\
-        .collection("dialogs")\
-        .document(user_id)\
-        .collection("messages")\
-        .add(
-            {
-                "ts": datetime.datetime.utcnow(),
-                "user": user_msg,
-                "bot": bot_msg,
-            }
-        )
+def _get_db() -> AsyncClient:
+    global _db
+    if _db is None:
+        _db = AsyncClient()
+    return _db
 
 
-async def get_dialog_page(user_id: str, page: int = 1, limit: int = 20):
-    snap = await (
-        _get_client()
+async def save_dialog(uid: str, user_msg: str, bot_msg: str):
+    col = _get_db().collection("dialogs").document(uid).collection("msgs")
+    ts = datetime.datetime.utcnow()
+    await col.add({"user": user_msg, "bot": bot_msg, "ts": ts})
+
+
+async def get_dialog_page(uid: str, page: int, size: int = 10):
+    col = (
+        _get_db()
         .collection("dialogs")
-        .document(user_id)
-        .collection("messages")
+        .document(uid)
+        .collection("msgs")
         .order_by("ts", direction="DESCENDING")
-        .offset((page - 1) * limit)
-        .limit(limit)
-        .get()
+        .limit(size)
+        .offset(page * size)
     )
-    return [d.to_dict() for d in snap]
+    docs = await col.get()
+    return [d.to_dict() for d in docs]
 
 
-async def set_topic(user_id: str, topic: str):
-    await _get_client()\
-        .collection("users")\
-        .document(user_id)\
-        .set({"topic": topic}, merge=True)
+async def set_topic(uid: str, topic: str):
+    await _get_db().collection("topics").document(uid).set({"topic": topic})
+
+
+async def get_topic(uid: str):
+    doc = await _get_db().collection("topics").document(uid).get()
+    return (doc.to_dict() or {}).get("topic")
 
