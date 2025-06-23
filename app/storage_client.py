@@ -1,24 +1,23 @@
 from google.cloud.storage import Client
-from uuid import uuid4
-import mimetypes, os, asyncio
+import mimetypes
+import os
+import asyncio
+from typing import Optional
 
 _BUCKET = os.environ["GCS_BUCKET"]
 _PUBLIC = f"https://storage.googleapis.com/{_BUCKET}"
-_client: Client | None = None
+_client: Optional[Client] = None
 
-
-def _get_client():
+def _get_client() -> Client:
     global _client
     if _client is None:
         _client = Client()
     return _client
 
-
 async def put_file(name: str, data: bytes) -> str:
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _upload_sync, name, data)
     return f"{_PUBLIC}/{name}"
-
 
 def _upload_sync(name: str, data: bytes):
     blob = _get_client().bucket(_BUCKET).blob(name)
