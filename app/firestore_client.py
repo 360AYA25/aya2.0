@@ -1,5 +1,5 @@
 import os, datetime
-from google.cloud.firestore_async import AsyncClient
+from google.cloud.firestore import AsyncClient   
 
 _db: AsyncClient | None = None
 
