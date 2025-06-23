@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Request
 from telegram import Update, Bot
 from telegram.ext import (
@@ -65,27 +66,36 @@ async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✓ uploaded → {url}")
 
 async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    logging.warning("cmd_summarize вызвана")  # 👈 Лог для Render
     if not update.message or not update.message.document:
         if update.message:
             await update.message.reply_text("Attach a .pdf, .txt или .md файл с /summarize")
+        logging.warning("нет документа")
         return
     doc = update.message.document
     filename = doc.file_name or "document"
+    logging.warning(f"Получен файл: {filename}")
     if not filename.lower().endswith((".pdf", ".txt", ".md")):
         await update.message.reply_text("Поддерживаются только PDF, TXT, MD (до 10 кБ)")
+        logging.warning("неподдерживаемый формат файла")
         return
     raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
+    logging.warning(f"Размер файла: {len(raw)} байт")
     if len(raw) > 10_000:
         await update.message.reply_text("Файл слишком большой (до 10 кБ)")
+        logging.warning("файл слишком большой")
         return
     try:
         summary = await summarize(bytes(raw), filename)
         if not summary or not summary.strip():
             await update.message.reply_text("Summary пустое или не удалось сгенерировать.")
+            logging.warning("summary пустое")
         else:
             await update.message.reply_text(summary, parse_mode="Markdown")
+            logging.warning("summary отправлено")
     except Exception as e:
         await update.message.reply_text(f"Ошибка при обработке файла: {e}")
+        logging.error(f"Ошибка: {e}")
 
 async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user and update.message and update.message.text:
