@@ -78,8 +78,14 @@ async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if len(raw) > 10_000:
         await update.message.reply_text("Файл слишком большой (до 10 кБ)")
         return
-    summary = await summarize(bytes(raw), filename)
-    await update.message.reply_text(summary, parse_mode="Markdown")
+    try:
+        summary = await summarize(bytes(raw), filename)
+        if not summary or not summary.strip():
+            await update.message.reply_text("Summary пустое или не удалось сгенерировать.")
+        else:
+            await update.message.reply_text(summary, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка при обработке файла: {e}")
 
 async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user and update.message and update.message.text:
