@@ -17,8 +17,9 @@ HISTORY_PAGE_SIZE = 10
 
 @router.post("/webhook/telegram")
 async def webhook(req: Request):
-    upd = Update.de_json(await req.json(), Bot("DUMMY_TOKEN"))
-    await req.app.state.tg_app.process_update(upd)
+    update_json = await req.json()
+    update = Update.de_json(update_json, req.app.state.tg_app.bot)
+    await req.app.state.tg_app.process_update(update)
     return {"ok": True}
 
 async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
