@@ -1,20 +1,48 @@
-import os, json
 from google.cloud.storage import Client
-from google.oauth2 import service_account
+from google.cloud.exceptions import NotFound
+from uuid import uuid4
+import mimetypes
+import os
 
-_creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
-)
-_client = Client(credentials=_creds, project=_creds.project_id)
-_bucket = _client.bucket(os.environ["GCS_BUCKET"])   # имя бакета
+_BUCKET = os.environ["GCS_BUCKET"]          # пример: aya360
+_PUBLIC_URL = f"https://storage.googleapis.com/{_BUCKET}"
 
-async def put_file(path: str, data: bytes) -> str:
-    blob = _bucket.blob(path)
-    blob.upload_from_string(data)
+_client: Client | None = None
+
+
+def _get_client() -> Client:
+    global _client
+    if _client is None:
+        _client = Client()
+    return _client
+
+
+def put_file(path: str, data: bytes) -> str:
+    """
+    Сохраняет файл в бакет.
+    path – относительный путь в бакете (например user123/file.pdf)
+    data – содержимое.
+    Возвращает публичный URL.
+    """
+    bucket = _get_client().bucket(_BUCKET)
+    blob = bucket.blob(path)
+    blob.upload_from_string(
+        data,
+        content_type=mimetypes.guess_type(path)[0] or "application/octet-stream",
+    )
+    # делаем файл публичным
     blob.make_public()
-    return blob.public_url  # https://storage.googleapis.com/...
+    return f"{_PUBLIC_URL}/{path}"
 
-async def get_file(path: str) -> bytes:
-    blob = _bucket.blob(path)
-    return blob.download_as_bytes()
+
+def get_file(path: str) -> bytes | None:
+    """
+    Возвращает содержимое файла или None, если нет.
+    """
+    bucket = _get_client().bucket(_BUCKET)
+    blob = bucket.blob(path)
+    try:
+        return blob.download_as_bytes()
+    except NotFound:
+        return None
 
