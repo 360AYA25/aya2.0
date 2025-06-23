@@ -1,45 +1,47 @@
-import os, json
-from google.cloud.firestore import AsyncClient
-from google.oauth2 import service_account
-from google.cloud.firestore_v1 import SERVER_TIMESTAMP
+from google.cloud.firestore_async import AsyncClient
+import datetime
 
-_creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
-)
-_db = AsyncClient(credentials=_creds, project=_creds.project_id)
+_client: AsyncClient | None = None
 
 
-async def save_dialog(user_text: str, bot_text: str, *, topic: str = "default"):
-    await (
-        _db.collection("dialogs")
-        .document(topic)
+def _get_client() -> AsyncClient:
+    global _client
+    if _client is None:
+        _client = AsyncClient()
+    return _client
+
+
+async def save_dialog(user_id: str, user_msg: str, bot_msg: str):
+    await _get_client()\
+        .collection("dialogs")\
+        .document(user_id)\
+        .collection("messages")\
+        .add(
+            {
+                "ts": datetime.datetime.utcnow(),
+                "user": user_msg,
+                "bot": bot_msg,
+            }
+        )
+
+
+async def get_dialog_page(user_id: str, page: int = 1, limit: int = 20):
+    snap = await (
+        _get_client()
+        .collection("dialogs")
+        .document(user_id)
         .collection("messages")
-        .add({"user": user_text, "bot": bot_text, "time": SERVER_TIMESTAMP})
-    )
-
-
-async def get_last_dialog(topic: str, limit: int = 6):
-    docs = (
-        await _db.collection("dialogs")
-        .document(topic)
-        .collection("messages")
-        .order_by("time", direction="DESCENDING")
+        .order_by("ts", direction="DESCENDING")
+        .offset((page - 1) * limit)
         .limit(limit)
         .get()
     )
-    return [d.to_dict() for d in docs][::-1]
+    return [d.to_dict() for d in snap]
 
 
-async def get_dialog_page(topic: str, *, limit: int = 6, page: int = 1):
-    docs = (
-        await _db.collection("dialogs")
-        .document(topic)
-        .collection("messages")
-        .order_by("time", direction="DESCENDING")
-        .limit(limit * page)
-        .get()
-    )
-    data = [d.to_dict() for d in docs][::-1]
-    start = (page - 1) * limit
-    return data[start : start + limit]
+async def set_topic(user_id: str, topic: str):
+    await _get_client()\
+        .collection("users")\
+        .document(user_id)\
+        .set({"topic": topic}, merge=True)
 
