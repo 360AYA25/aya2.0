@@ -1,3 +1,6 @@
+import os
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/etc/secrets/service-account.json"
+
 import datetime
 from google.cloud.firestore import AsyncClient
 
