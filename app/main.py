@@ -1,26 +1,13 @@
-import os
-from fastapi import FastAPI, Request
-from fastapi.responses import Response
-from fastapi.middleware.cors import CORSMiddleware
-from app.telegram_adapter import build_app
-
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+from fastapi import FastAPI
+from app.telegram_adapter import router as tg_router, build_app
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.include_router(tg_router)
 
-tg_app = build_app(TOKEN)
+tg_app = build_app()
+
 
 @app.on_event("startup")
-async def _init() -> None:
+async def startup():
     await tg_app.initialize()
-
-@app.post("/webhook/telegram")
-async def webhook(req: Request) -> Response:
-    await tg_app.process_update(await req.body())
-    return Response(status_code=200)
-
-@app.get("/")
-def root() -> dict:
-    return {"status": "ok"}
 
