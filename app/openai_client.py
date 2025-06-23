@@ -1,21 +1,16 @@
-import os
-import openai
+import openai, os, asyncio
 
 openai.api_key = os.environ["OPENAI_KEY"]
 
-
-async def ask_gpt(user_id: str, prompt: str) -> str:
-    """
-    Unified wrapper for ChatCompletion.
-    """
-    resp = await openai.ChatCompletion.acreate(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": f"user_id:{user_id}"},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=512,
-        temperature=0.7,
+async def ask_gpt(prompt: str) -> str:
+    loop = asyncio.get_running_loop()
+    resp = await loop.run_in_executor(
+        None,
+        lambda: openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        ),
     )
     return resp.choices[0].message.content.strip()
 
