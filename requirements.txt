@@ -8,4 +8,5 @@ google-cloud-storage>=2.16.0
 aiofiles
 python-multipart
 PyPDF2>=3.0.0
+PyPDF2>=3.0.1
 
