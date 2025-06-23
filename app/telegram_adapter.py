@@ -5,12 +5,13 @@ from telegram.ext import (
 )
 import uuid
 import os
-
 from app.firestore_client import (
-    save_dialog, get_dialog_page, set_topic, get_topic
+    save_dialog, get_dialog_page, get_dialog_total, set_topic, get_topic
 )
 from app.storage_client import put_file
 from app.openai_client import ask_gpt
+
+HISTORY_PAGE_SIZE = 10
 
 async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
@@ -24,9 +25,21 @@ async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user and update.message:
         uid = str(update.effective_user.id)
-        page = await get_dialog_page(uid, 0)
-        txt = "\n\n".join(f"💬 {d['user']}\n🤖 {d['bot']}" for d in page) or "— empty —"
-        await update.message.reply_text(txt)
+        try:
+            page = int(ctx.args[0]) if ctx.args else 1
+        except Exception:
+            page = 1
+        page = max(page, 1)
+        size = HISTORY_PAGE_SIZE
+        total = await get_dialog_total(uid)
+        max_page = max((total + size - 1) // size, 1)
+        page = min(page, max_page)
+        msgs = await get_dialog_page(uid, page - 1, size)
+        text = "\n\n".join(
+            f"💬 {d['user']}\n🤖 {d['bot']}" for d in msgs
+        ) or "— empty —"
+        footer = f"\n\n◀️ {page} / {max_page} ▶️"
+        await update.message.reply_text(text + footer)
 
 async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.document:

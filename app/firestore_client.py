@@ -31,6 +31,17 @@ async def get_dialog_page(uid: str, page: int, size: int = 10):
         return [d.to_dict() for d in docs]
     return []
 
+async def get_dialog_total(uid: str) -> int:
+    db = _get_db()
+    if db is not None:
+        col = (
+            db.collection("dialogs")
+            .document(uid)
+            .collection("msgs")
+        )
+        return len(await col.get())
+    return 0
+
 async def set_topic(uid: str, topic: str):
     db = _get_db()
     if db is not None:
