@@ -1,13 +1,20 @@
-import os, uuid, pathlib
+import os, json
+from google.cloud.storage import Client
+from google.oauth2 import service_account
 
-_BASE = pathlib.Path(__file__).parent.parent / "local_uploads"
-_BASE.mkdir(exist_ok=True)
+_creds = service_account.Credentials.from_service_account_info(
+    json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+)
+_client = Client(credentials=_creds, project=_creds.project_id)
+_bucket = _client.bucket(os.environ["GCS_BUCKET"])   # имя бакета
 
-def put_file(name: str, data: bytes) -> str:
-    fname = f"{uuid.uuid4().hex}_{os.path.basename(name)}"
-    (_BASE / fname).write_bytes(data)
-    return f"/files/{fname}"
+async def put_file(path: str, data: bytes) -> str:
+    blob = _bucket.blob(path)
+    blob.upload_from_string(data)
+    blob.make_public()
+    return blob.public_url  # https://storage.googleapis.com/...
 
-def get_file(name: str) -> bytes:
-    return (_BASE / name).read_bytes()
+async def get_file(path: str) -> bytes:
+    blob = _bucket.blob(path)
+    return blob.download_as_bytes()
 
