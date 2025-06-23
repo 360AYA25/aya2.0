@@ -1,10 +1,9 @@
 from fastapi import FastAPI
+from app.telegram_adapter import build_app
 
-from app.telegram_adapter import router as tg_router, build_app
 import os
 
 app = FastAPI()
-app.include_router(tg_router)
 
 @app.on_event("startup")
 async def on_startup():

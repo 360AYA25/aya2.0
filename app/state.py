@@ -1,18 +1,19 @@
-from app.firestore_client import _db
+from typing import Any
 
-_topic_cache: dict[str, str] = {}
+_db: Any = None
 
+def get_db():
+    global _db
+    if _db is None:
+        # Тут инициализация, если потребуется
+        pass
+    return _db
 
-async def set_topic(user_id: str, topic: str) -> None:
-    _topic_cache[user_id] = topic
-    await _db.collection("users").document(user_id).set({"topic": topic})
-
-
-async def get_topic(user_id: str) -> str:
-    if user_id in _topic_cache:
-        return _topic_cache[user_id]
-    doc = await _db.collection("users").document(user_id).get()
-    topic = doc.to_dict().get("topic", "default") if doc.exists else "default"
-    _topic_cache[user_id] = topic
-    return topic
+def example_usage():
+    db = get_db()
+    if db is not None:
+        db.collection("some_collection")
+    else:
+        # обработка случая, когда db не инициализирован
+        pass
 
