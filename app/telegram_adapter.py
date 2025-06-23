@@ -1,6 +1,7 @@
-from telegram import Update
+from fastapi import APIRouter, Request
+from telegram import Update, Bot
 from telegram.ext import (
-    Application, ContextTypes, AIORateLimiter,
+    ApplicationBuilder, ContextTypes, AIORateLimiter,
     CommandHandler, MessageHandler, filters
 )
 import uuid
@@ -11,7 +12,14 @@ from app.firestore_client import (
 from app.storage_client import put_file
 from app.openai_client import ask_gpt
 
+router = APIRouter()
 HISTORY_PAGE_SIZE = 10
+
+@router.post("/webhook/telegram")
+async def webhook(req: Request):
+    upd = Update.de_json(await req.json(), Bot("DUMMY_TOKEN"))
+    await req.app.state.tg_app.process_update(upd)
+    return {"ok": True}
 
 async def cmd_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
@@ -64,7 +72,7 @@ async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def build_app(token: str):
     app = (
-        Application.builder()
+        ApplicationBuilder()
         .token(token)
         .rate_limiter(AIORateLimiter())
         .build()
