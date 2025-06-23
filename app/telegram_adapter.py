@@ -11,6 +11,7 @@ from app.firestore_client import (
 )
 from app.storage_client import put_file
 from app.openai_client import ask_gpt
+from app.doc_summarizer import summarize
 
 router = APIRouter()
 HISTORY_PAGE_SIZE = 10
@@ -63,6 +64,23 @@ async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         url = await put_file(name, bytes(raw))
         await update.message.reply_text(f"✓ uploaded → {url}")
 
+async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.document:
+        if update.message:
+            await update.message.reply_text("Attach a .pdf, .txt или .md файл с /summarize")
+        return
+    doc = update.message.document
+    filename = doc.file_name or "document"
+    if not filename.lower().endswith((".pdf", ".txt", ".md")):
+        await update.message.reply_text("Поддерживаются только PDF, TXT, MD (до 10 кБ)")
+        return
+    raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
+    if len(raw) > 10_000:
+        await update.message.reply_text("Файл слишком большой (до 10 кБ)")
+        return
+    summary = await summarize(bytes(raw), filename)
+    await update.message.reply_text(summary, parse_mode="Markdown")
+
 async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user and update.message and update.message.text:
         uid = str(update.effective_user.id)
@@ -81,6 +99,7 @@ async def build_app(token: str):
     app.add_handler(CommandHandler("topic", cmd_topic))
     app.add_handler(CommandHandler("history", cmd_history))
     app.add_handler(CommandHandler("upload", cmd_upload))
+    app.add_handler(CommandHandler("summarize", cmd_summarize))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     return app
 
