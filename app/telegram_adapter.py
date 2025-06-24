@@ -66,7 +66,7 @@ async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✓ uploaded → {url}")
 
 async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    logging.warning("cmd_summarize вызвана")  # 👈 Лог для Render
+    logging.warning("cmd_summarize вызвана")
     if not update.message or not update.message.document:
         if update.message:
             await update.message.reply_text("Attach a .pdf, .txt или .md файл с /summarize")
@@ -115,7 +115,8 @@ async def build_app(token: str):
     app.add_handler(CommandHandler("topic", cmd_topic))
     app.add_handler(CommandHandler("history", cmd_history))
     app.add_handler(CommandHandler("upload", cmd_upload))
-    app.add_handler(CommandHandler("summarize", cmd_summarize))
+    # Новый хэндлер: /summarize в подписи документа (caption)
+    app.add_handler(MessageHandler(filters.Document.ALL & filters.CaptionRegex(r"^/summarize"), cmd_summarize))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     return app
 
