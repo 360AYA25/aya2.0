@@ -13,6 +13,7 @@ from app.firestore_client import (
 from app.storage_client import put_file
 from app.openai_client import ask_gpt
 from app.doc_summarizer import summarize
+from app.search_client import search
 
 router = APIRouter()
 HISTORY_PAGE_SIZE = 10
@@ -65,37 +66,45 @@ async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         url = await put_file(name, bytes(raw))
         await update.message.reply_text(f"✓ uploaded → {url}")
 
+async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
+        await update.message.reply_text("usage: /search <query>")
+        return
+    query = " ".join(ctx.args)
+    if len(query) > 256:
+        await update.message.reply_text("Query too long (≤ 256 chars)")
+        return
+    hits = await search(query)
+    if not hits:
+        await update.message.reply_text("— no matches —")
+        return
+    context = "\n\n".join(h["text"][:2000] for h in hits)
+    answer = await ask_gpt(query, context)
+    links = "\n".join(f"• {h['title']} — {h['url']}" for h in hits)
+    await update.message.reply_text(f"{answer}\n\n{links}")
+
 async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    logging.warning("cmd_summarize вызвана")
     if not update.message or not update.message.document:
         if update.message:
             await update.message.reply_text("Attach a .pdf, .txt или .md файл с /summarize")
-        logging.warning("нет документа")
         return
     doc = update.message.document
     filename = doc.file_name or "document"
-    logging.warning(f"Получен файл: {filename}")
     if not filename.lower().endswith((".pdf", ".txt", ".md")):
         await update.message.reply_text("Поддерживаются только PDF, TXT, MD (до 10 кБ)")
-        logging.warning("неподдерживаемый формат файла")
         return
     raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
-    logging.warning(f"Размер файла: {len(raw)} байт")
     if len(raw) > 10_000:
         await update.message.reply_text("Файл слишком большой (до 10 кБ)")
-        logging.warning("файл слишком большой")
         return
     try:
         summary = await summarize(bytes(raw), filename)
         if not summary or not summary.strip():
             await update.message.reply_text("Summary пустое или не удалось сгенерировать.")
-            logging.warning("summary пустое")
         else:
             await update.message.reply_text(summary, parse_mode="Markdown")
-            logging.warning("summary отправлено")
     except Exception as e:
         await update.message.reply_text(f"Ошибка при обработке файла: {e}")
-        logging.error(f"Ошибка: {e}")
 
 async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user and update.message and update.message.text:
@@ -115,8 +124,8 @@ async def build_app(token: str):
     app.add_handler(CommandHandler("topic", cmd_topic))
     app.add_handler(CommandHandler("history", cmd_history))
     app.add_handler(CommandHandler("upload", cmd_upload))
-    # Новый хэндлер: /summarize в подписи документа (caption)
-    app.add_handler(MessageHandler(filters.Document.ALL & filters.CaptionRegex(r"^/summarize"), cmd_summarize))
+    app.add_handler(CommandHandler("search", cmd_search))
+    app.add_handler(CommandHandler("summarize", cmd_summarize))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     return app
 
