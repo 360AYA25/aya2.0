@@ -1,4 +1,3 @@
-import logging
 from fastapi import APIRouter, Request
 from telegram import Update, Bot
 from telegram.ext import (
@@ -68,20 +67,24 @@ async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
-        await update.message.reply_text("usage: /search <query>")
+        if update.message:
+            await update.message.reply_text("usage: /search <query>")
         return
     query = " ".join(ctx.args)
     if len(query) > 256:
-        await update.message.reply_text("Query too long (≤ 256 chars)")
+        if update.message:
+            await update.message.reply_text("Query too long (≤ 256 chars)")
         return
     hits = await search(query)
     if not hits:
-        await update.message.reply_text("— no matches —")
+        if update.message:
+            await update.message.reply_text("— no matches —")
         return
     context = "\n\n".join(h["text"][:2000] for h in hits)
     answer = await ask_gpt(query, context)
     links = "\n".join(f"• {h['title']} — {h['url']}" for h in hits)
-    await update.message.reply_text(f"{answer}\n\n{links}")
+    if update.message:
+        await update.message.reply_text(f"{answer}\n\n{links}")
 
 async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.document:
@@ -91,20 +94,25 @@ async def cmd_summarize(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
     filename = doc.file_name or "document"
     if not filename.lower().endswith((".pdf", ".txt", ".md")):
-        await update.message.reply_text("Поддерживаются только PDF, TXT, MD (до 10 кБ)")
+        if update.message:
+            await update.message.reply_text("Поддерживаются только PDF, TXT, MD (до 10 кБ)")
         return
     raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
     if len(raw) > 10_000:
-        await update.message.reply_text("Файл слишком большой (до 10 кБ)")
+        if update.message:
+            await update.message.reply_text("Файл слишком большой (до 10 кБ)")
         return
     try:
         summary = await summarize(bytes(raw), filename)
         if not summary or not summary.strip():
-            await update.message.reply_text("Summary пустое или не удалось сгенерировать.")
+            if update.message:
+                await update.message.reply_text("Summary пустое или не удалось сгенерировать.")
         else:
-            await update.message.reply_text(summary, parse_mode="Markdown")
+            if update.message:
+                await update.message.reply_text(summary, parse_mode="Markdown")
     except Exception as e:
-        await update.message.reply_text(f"Ошибка при обработке файла: {e}")
+        if update.message:
+            await update.message.reply_text(f"Ошибка при обработке файла: {e}")
 
 async def text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if update.effective_user and update.message and update.message.text:
