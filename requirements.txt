@@ -9,4 +9,5 @@ aiofiles
 python-multipart
 PyPDF2>=3.0.0
 PyPDF2>=3.0.1
+google-cloud-firestore[pandas]>=2.21.0
 
