@@ -68,11 +68,12 @@ async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"🚫 Unsupported file type ({ext})")
             logging.warning(f"Unsupported file type: {ext}")
             return
-        if doc.file_size > UPLOAD_LIMIT:
+        file_size = doc.file_size if doc.file_size is not None else 0
+        if file_size > UPLOAD_LIMIT:
             if update.message:
                 await update.message.reply_text("🚫 File too large (>10 MB)")
-            logging.warning(f"File too large: {doc.file_size} bytes")
-            return
+            logging.warning(f"File too large: {file_size} bytes")
+            return 
         if ctx.bot:
             raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
             name = f"{uuid.uuid4().hex}{ext}"
