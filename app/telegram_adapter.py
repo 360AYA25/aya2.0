@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Request
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, ContextTypes, AIORateLimiter,
     CommandHandler, MessageHandler, filters
 )
 import uuid
 import os
+import logging
 from app.firestore_client import (
     save_dialog, get_dialog_page, get_dialog_total, set_topic, get_topic
 )
@@ -16,6 +17,8 @@ from app.search_client import search
 
 router = APIRouter()
 HISTORY_PAGE_SIZE = 10
+UPLOAD_LIMIT = 10 * 1024 * 1024
+ALLOWED_EXTS = (".pdf", ".txt", ".md")
 
 @router.post("/webhook/telegram")
 async def webhook(req: Request):
@@ -53,17 +56,32 @@ async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text + footer)
 
 async def cmd_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.document:
+    try:
+        if not update.message or not update.message.document:
+            if update.message:
+                await update.message.reply_text("Attach a .pdf, .txt, or .md file with /upload")
+            return
+        doc = update.message.document
+        ext = os.path.splitext(doc.file_name or "")[1].lower()
+        if ext not in ALLOWED_EXTS:
+            if update.message:
+                await update.message.reply_text(f"🚫 Unsupported file type ({ext})")
+            logging.warning(f"Unsupported file type: {ext}")
+            return
+        if doc.file_size > UPLOAD_LIMIT:
+            if update.message:
+                await update.message.reply_text("🚫 File too large (>10 MB)")
+            logging.warning(f"File too large: {doc.file_size} bytes")
+            return
+        if ctx.bot:
+            raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
+            name = f"{uuid.uuid4().hex}{ext}"
+            url = await put_file(name, bytes(raw))
+            await update.message.reply_text(f"✓ uploaded → {url}")
+    except Exception as e:
+        logging.warning(f"Error in /upload: {e}")
         if update.message:
-            await update.message.reply_text("Attach a file with /upload")
-        return
-    doc = update.message.document
-    if ctx.bot:
-        raw = await (await ctx.bot.get_file(doc.file_id)).download_as_bytearray()
-        ext = os.path.splitext(doc.file_name)[1] if doc.file_name else ""
-        name = f"{uuid.uuid4().hex}{ext}"
-        url = await put_file(name, bytes(raw))
-        await update.message.reply_text(f"✓ uploaded → {url}")
+            await update.message.reply_text("❗️ Error uploading file. Please try again.")
 
 async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
