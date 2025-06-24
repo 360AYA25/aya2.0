@@ -150,7 +150,7 @@ async def build_app(token: str):
     )
     app.add_handler(CommandHandler("topic", cmd_topic))
     app.add_handler(CommandHandler("history", cmd_history))
-    app.add_handler(CommandHandler("upload", cmd_upload))
+    app.add_handler(MessageHandler(filters.Document.ALL & filters.CaptionRegex(r"^/upload"), cmd_upload))
     app.add_handler(CommandHandler("search", cmd_search))
     app.add_handler(CommandHandler("summarize", cmd_summarize))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
