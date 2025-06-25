@@ -1,6 +1,3 @@
-import os
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/etc/secrets/service-account.json"
-
 import datetime
 from google.cloud.firestore import AsyncClient
 
@@ -56,4 +53,3 @@ async def get_topic(uid: str):
         doc = await db.collection("topics").document(uid).get()
         return (doc.to_dict() or {}).get("topic")
     return None
-
