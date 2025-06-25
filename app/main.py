@@ -14,3 +14,10 @@ async def on_startup():
 async def on_shutdown():
     await app.state.tg_app.shutdown()
 
+from core.prompt_loader import reload_prompts
+
+@app.post("/reload_prompts")
+async def reload_prompts_endpoint():
+    reload_prompts()
+    return {"reloaded": True}
+
