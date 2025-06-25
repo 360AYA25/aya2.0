@@ -21,3 +21,7 @@ async def reload_prompts_endpoint():
     reload_prompts()
     return {"reloaded": True}
 
+@app.get("/ping")
+async def ping():
+    return {"pong": True}
+
