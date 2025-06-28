@@ -1,6 +1,15 @@
+import os
+
+# ===== DEBUG BLOCK (выведет инфу о секретах и переменных) =====
+print("DEBUG: GOOGLE_APPLICATION_CREDENTIALS =", os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+try:
+    print("DEBUG: /etc/secrets/ =", os.listdir("/etc/secrets"))
+except Exception as e:
+    print("DEBUG: /etc/secrets/ error:", e)
+# =============================================================
+
 from fastapi import FastAPI
 from app.telegram_adapter import router as tg_router, build_app
-import os
 
 app = FastAPI()
 app.include_router(tg_router)
@@ -24,4 +33,5 @@ async def reload_prompts_endpoint():
 @app.get("/ping")
 async def ping():
     return {"pong": True}
+
 
