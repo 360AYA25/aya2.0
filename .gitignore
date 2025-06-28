@@ -1,2 +1,5 @@
-local_uploads/
+*.pyc
+*.bak
+*.save
+__pycache__/
 
