@@ -2,12 +2,10 @@ fastapi
 uvicorn[standard]
 python-telegram-bot[async,rate-limiter]==20.8
 openai==0.28.1
-google-cloud-firestore>=2.11.0
+google-cloud-firestore[pandas]>=2.21.0
 google-auth>=2.22.0
 google-cloud-storage>=2.16.0
 aiofiles
 python-multipart
-PyPDF2>=3.0.0
-PyPDF2>=3.0.1
-google-cloud-firestore[pandas]>=2.21.0
+PyPDF2==3.0.1
 
