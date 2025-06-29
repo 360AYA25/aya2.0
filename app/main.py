@@ -10,10 +10,14 @@ except Exception as e:
 
 from fastapi import FastAPI
 from app.telegram_adapter import router as tg_router, build_app
+from core.prompt_loader import reload_prompts
 
 app = FastAPI()
+
+# Подключение Telegram webhook-роутера
 app.include_router(tg_router)
 
+# Telegram-бот: инициализация при старте, shutdown при остановке
 @app.on_event("startup")
 async def on_startup():
     app.state.tg_app = await build_app(os.environ["TELEGRAM_TOKEN"])
@@ -23,15 +27,13 @@ async def on_startup():
 async def on_shutdown():
     await app.state.tg_app.shutdown()
 
-from core.prompt_loader import reload_prompts
-
+# Endpoint для ручной перезагрузки промптов (POST)
 @app.post("/reload_prompts")
 async def reload_prompts_endpoint():
     reload_prompts()
     return {"reloaded": True}
 
+# Проверка живости сервиса (GET)
 @app.get("/ping")
 async def ping():
     return {"pong": True}
-
-
