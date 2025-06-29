@@ -110,16 +110,8 @@ async def create_tg_app(token: str):
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     return app
 
-# ——— Добавь это в startup FastAPI ———
-def setup_tg_app(app):  # app = FastAPI instance
-    @app.on_event("startup")
-    async def on_startup():
-        token = os.environ["TELEGRAM_TOKEN"]
-        tg_app = await create_tg_app(token)
-        await tg_app.initialize()  # <<< КРИТИЧЕСКО!
-        app.state.tg_app = tg_app
-
-# === FASTAPI ENDPOINT ===
+# Фикс для main.py (можно импортировать как build_app)
+build_app = create_tg_app
 
 @router.post("/webhook/telegram")
 async def webhook(request: Request):
